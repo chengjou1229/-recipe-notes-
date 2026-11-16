@@ -1,0 +1,30 @@
+'use strict';
+const nb=window.FoodNotebook;
+const recipe=window.RECIPES.find(r=>r.id===new URLSearchParams(location.search).get('id'));
+if(!recipe){document.getElementById('main').innerHTML='<section class="empty"><h1>找不到這道食譜</h1><p>可能是連結不完整，請回到食譜清單重新選擇。</p><a class="button" href="index.html#recipes">返回食譜清單</a></section>';}
+else{
+ document.title=recipe.name+'｜想學的食譜筆記';
+ let page=0;const checks=new Set();let draft=nb.read(recipe.id);let dirty=false;
+ const slide=document.getElementById('slide');
+ const titles=['食材準備','流程總覽',...recipe.steps.map(s=>s.title),'注意事項','實作心得'];
+ const sources='<div class="source">AI 協助整理的食譜草稿，尚待實作驗證 · 整理日期：2026-11-16<br>食安參考：<a href="https://www.foodsafety.gov/food-safety-charts/safe-minimum-internal-temperatures" target="_blank" rel="noopener noreferrer">FoodSafety.gov：安全中心溫度</a>、<a href="https://www.fda.gov/food/buy-store-serve-safe-food/what-you-need-know-about-egg-safety" target="_blank" rel="noopener noreferrer">FDA：雞蛋處理與保存</a>。配方為 AI 整理，非上述機構提供。</div>';
+ function heading(){document.getElementById('lesson-heading').innerHTML=`<p class="eyebrow">${recipe.english}</p><h1>${recipe.name}</h1><div class="lesson-meta">一人份 · 預估 ${nb.duration(recipe)} · <span class="badge">${nb.escape(draft.status)}</span> <span class="draft">待實作驗證的食譜草稿</span></div>`;}
+ function outline(){document.getElementById('outline').innerHTML=titles.map((t,i)=>`<button data-page="${i}" ${i===page?'aria-current="step"':''}>${String(i+1).padStart(2,'0')}　${t}</button>`).join('');document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>go(Number(b.dataset.page))));}
+ function go(next){page=Math.max(0,Math.min(titles.length-1,next));render();slide.focus({preventScroll:true});}
+ function render(){
+  heading();outline();
+  let content='';
+  if(page===0){content=`<div class="slide-illustration" style="--tint:${recipe.tint}">${nb.illustration(recipe.id)}<p class="small center">料理示意插圖</p></div><p>${recipe.goal}</p><p class="small">準備 ${recipe.time.prep} 分鐘 · 烹調約 ${recipe.time.cook} 分鐘${recipe.time.wait?` · 冷卻／等待約 ${recipe.time.wait} 分鐘`:''}<br>總計約 ${nb.duration(recipe)}（含等待），實際依設備與狀態調整。</p><h3>所需食材 · 一人份</h3><ul class="ingredient-list">${recipe.ingredients.map((x,i)=>`<li><label><input type="checkbox" data-ingredient="${i}" ${checks.has(i)?'checked':''}><span>${nb.escape(x)}</span></label></li>`).join('')}</ul><p class="small">勾選表示已備妥；切換投影片會保留，重新整理後重設。</p><h3>所需器具</h3><p>${recipe.tools.join('、')}。</p><div class="callout">過敏原：${recipe.allergens}<br>量匙換算：一茶匙 5 毫升、一湯匙 15 毫升。</div>`;}
+  else if(page===1){content=`<p>先看一遍全流程，知道下一步要做什麼，再開始動手。</p><ol>${recipe.steps.map(s=>`<li><strong>${s.title}</strong><br><span class="small">${s.time}</span></li>`).join('')}</ol><div class="callout">今天的學習重點：${recipe.goal}</div>`;}
+  else if(page>=2&&page<recipe.steps.length+2){const s=recipe.steps[page-2];content=`<p class="eyebrow">STEP ${String(page-1).padStart(2,'0')} / ${recipe.steps.length}</p><p class="badge">${s.time}</p><p>${s.body}</p><h3>怎麼知道這一步完成了？</h3><p>${s.check}</p><div class="callout"><strong>小提醒</strong><br>${s.tip}</div>`;}
+  else if(page===titles.length-2){content=`<ul>${recipe.notes.map(x=>`<li>${x}</li>`).join('')}</ul><div class="callout">完成檢查：確認料理充分熟透，操作後關閉爐火／烤箱，妥善處理剩餘材料。烹調時間是估計，不能只憑時間判斷熟度。</div>${sources}`;}
+  else{content=`<p>這次學到了什麼？把真實的嘗試留在這裡，下次再進步一點點。</p><label class="note-field" for="status">目前的學習狀態</label><select id="status">${nb.statuses.map(s=>`<option${s===draft.status?' selected':''}>${s}</option>`).join('')}</select><label class="note-field" for="note">我的實作心得</label><textarea id="note" maxlength="6000" placeholder="尚未實作。做過之後，可以記下口感、遇到的問題，以及下次想調整的地方。"></textarea><p id="note-state" class="small"></p><div class="save-row"><button id="save" class="button">儲存我的筆記</button><span id="save-message" class="save-message" role="status"></span></div><p class="small">僅保存在目前瀏覽器，不會跨裝置同步；清除瀏覽器資料會移除紀錄。請將重要心得另外備份。</p><div class="photo-placeholder">尚未提供實作照片<br>未來可將照片放入 assets/images/${recipe.id}/ 並更新食譜資料。</div>${sources}`;}
+  slide.innerHTML=`<p class="eyebrow">MY COOKING PRACTICE · ${String(page+1).padStart(2,'0')}</p><h2 id="slide-title">${titles[page]}</h2><div class="progress" aria-hidden="true"><div style="width:${(page+1)/titles.length*100}%"></div></div>${content}`;
+  document.getElementById('page').textContent=`${page+1} / ${titles.length}`;document.getElementById('previous').disabled=page===0;document.getElementById('next').disabled=page===titles.length-1;
+  slide.querySelectorAll('[data-ingredient]').forEach(input=>input.addEventListener('change',()=>{const key=Number(input.dataset.ingredient);input.checked?checks.add(key):checks.delete(key);}));
+  if(page===titles.length-1){const note=document.getElementById('note'),status=document.getElementById('status'),state=document.getElementById('note-state');note.value=draft.note;state.textContent=dirty?'尚有未儲存的變更':draft.updated?'上次儲存：'+new Date(draft.updated).toLocaleString('zh-TW'):'尚未實作，還沒有儲存心得。';const capture=()=>{draft.note=note.value;draft.status=status.value;dirty=true;state.textContent='尚有未儲存的變更';};note.addEventListener('input',capture);status.addEventListener('change',capture);document.getElementById('save').addEventListener('click',()=>{const value={...draft,updated:new Date().toISOString()};const ok=nb.save(recipe.id,value);document.getElementById('save-message').textContent=ok?'已儲存到這個瀏覽器':'儲存失敗，請複製心得另行備份。';if(ok){draft=value;dirty=false;state.textContent='上次儲存：'+new Date(draft.updated).toLocaleString('zh-TW');heading();}});}
+ }
+ document.getElementById('previous').addEventListener('click',()=>go(page-1));document.getElementById('next').addEventListener('click',()=>go(page+1));
+ document.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey||e.target.closest('input,textarea,select,[contenteditable="true"]'))return;if(e.key==='ArrowRight'){e.preventDefault();go(page+1);}if(e.key==='ArrowLeft'){e.preventDefault();go(page-1);}});
+ window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});render();
+}
